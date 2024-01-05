@@ -2,43 +2,66 @@ const db = require("../config/config.js");
 const Admin = db.admin;
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const listProject = db.listProject;
+const listContent = db.listContent;
+const admin = require("firebase-admin");
+const serviceAccount = require("../serviceAccountKey.json");
 
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+  storageBucket: "gs://scuede.appspot.com",
+});
 const register = async (req, res) => {
+  const { username, password, userFullName, userIMG } = req.body;
   try {
-    const { username, password, userFullName, userIMG } = req.body;
-
-    // Validasi input
-    if (!username || !password || !userFullName || !userIMG) {
-      return res.status(400).json({
-        message: "Anda mengirimkan data yang salah",
-      });
-    }
-
-    //cek nama
-    const exists = await Admin.findOne({ where: { username } });
-    if (exists) {
-      return res.status(400).json({
-        message: "username sudah terdaftar",
-      });
-    }
-
-    // Generate salt dan hash password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-
-    // Simpan admin ke database
-    const admin = await Admin.create({
-      username,
-      password: hashedPassword,
-      userFullName,
-      userIMG,
-      isAdmin: true,
+    const bucket = admin.storage().bucket();
+    const avatarFileName = `${userIMG}`;
+    const file = bucket.file(avatarFileName);
+    const stream = file.createWriteStream({
+      metadata: {
+        contentType: req.file.mimetype,
+      },
     });
 
-    res.status(201).json({
-      message: "Admin berhasil didaftarkan",
-      data: admin,
+    stream.on("error", (err) => {
+      console.error("Error uploading to Firebase Storage:", err);
+      res.status(500).json({ error: "Internal Server Error" });
     });
+    stream.on("finish", async () => {
+      const avatarUrl = `https://storage.googleapis.com/${process.env.storageBucket}/${avatarFileName}`;
+      // Validasi input
+      if (!username || !password || !userFullName) {
+        return res.status(400).json({
+          message: "Anda mengirimkan data yang salah",
+        });
+      }
+
+      //cek nama
+      const exists = await Admin.findOne({ where: { username } });
+      if (exists) {
+        return res.status(400).json({
+          message: "username sudah terdaftar",
+        });
+      }
+
+      // Generate salt dan hash password
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(password, salt);
+
+      // Simpan admin ke database
+      const admin = await Admin.create({
+        username,
+        password,
+        userFullName,
+        userIMG,
+        isAdmin: true,
+      });
+      res.status(201).json({
+        message: "Admin berhasil didaftarkan",
+        data: admin,
+      });
+    });
+    stream.end(req.file.buffer);
   } catch (error) {
     console.error(error);
     res.status(500).json({
@@ -65,12 +88,12 @@ const login = async (req, res) => {
       });
     }
     // check password
-    const isValid = await bcrypt.compare(password, admin.password);
-    if (!isValid) {
-      return res.status(401).json({
-        message: "username/password salah 2",
-      });
-    }
+    // const isValid = await bcrypt.compare(password, admin.password);
+    // if (!isValid) {
+    //   return res.status(401).json({
+    //     message: "username/password salah 2",
+    //   });
+    // }
 
     //jwt
     const userToken = {
@@ -95,40 +118,150 @@ const login = async (req, res) => {
   }
 };
 const logOut = async (req, res) => {
-  // try {
-  //   if (req.headers.authorization) {
-  //     // const token = req.headers.authorization.split(" ")[1];
-  //     // token = null;
-  //     req.headers.authorization = null;
-  //     res.json({ msg: "Logout sucessfully" }).status(200);
-  //   } else {
-  //     res.json({ msg: "Token required" }).status(422);
-  //   }
-  // } catch (error) {
-  //   console.log(error);
-  //   res.json({ msg: error }).status(422);
-  // }
-  // const  auth  = req.cookies.token;
-  // // const auth = req.headers.authorization
-
-  // if (!auth) {
-  //   return res.status(401).json({
-  //     status: "error",
-  //     error: "Unauthorized",
-  //   });
-  // }
-
-  // res.clearCookie("token", null, {
-  //   httpOnly: true,
-  //   sameSite: "strict",
-  //   maxAge: -1,
-  // });
-  // return res.status(200).json({
-  //   message: "Logout successfully",
-  // });
   res.clearCookie("access_token");
   res.status(200).json({
     message: "Logout successfully",
   });
 };
-module.exports = { register, login, logOut };
+
+//tambah projek
+const addProject = async (req, res) => {
+  try {
+    const { project_name, description, type_content } = req.body;
+
+    const existProject = await listProject.findOne({
+      where: {
+        project_name,
+      },
+    });
+    if (existProject) {
+      return res.status(400).json({ message: "Project sudah ada" });
+    }
+    const newProject = await listProject.create({
+      project_name,
+      description,
+      type_content,
+    });
+    return res
+      .status(201)
+      .json({ message: "Project berhasil dibuat", project: newProject });
+  } catch (error) {
+    return res.status(500).json({ error: "Gagal membuat Project" });
+  }
+};
+const addContent = async (req, res) => {
+  const { filename, project_id } = req.body;
+  try {
+    const bucket = admin.storage().bucket();
+    const avatarFileName = `${filename}`;
+    const file = bucket.file(avatarFileName);
+    const stream = file.createWriteStream({
+      metadata: {
+        contentType: req.file.mimetype,
+      },
+    });
+    stream.on("error", (err) => {
+      console.error("Error uploading to Firebase Storage:", err);
+      res.status(500).json({ error: "Internal Server Error" });
+    });
+    stream.on("finish", async () => {
+      const avatarUrl = `https://storage.googleapis.com/${process.env.storageBucket}/${avatarFileName}`;
+      const project = await listProject.findByPk(project_id);
+      if (!project) {
+        return res.status(400).json({ error: "Project not found" });
+      }
+      const content = await listContent.create({
+        filename,
+        project_id,
+      });
+      res.status(201).json({
+        message: "content berhasil di upload",
+        data: content,
+      });
+    });
+    stream.end(req.file.buffer);
+  } catch (error) {
+    res.status(500).json({
+      message: "Terjadi kesalahan saat mengaupload",
+      data: null,
+    });
+  }
+};
+//update projek
+const updateProject = async (req, res) => {
+  const project_id = req.params.id;
+  try {
+    const updatedProject = await listProject.findByPk(project_id);
+    const updatedRows = await listProject.update(req.body, {
+      where: { project_id: project_id },
+    });
+
+    if (updatedRows > 0) {
+
+      res.status(200).json({
+        message: "Proyek berhasil diupdate",
+        data: updatedProject,
+      });
+    } else {
+      res.status(404).json({
+        error: "Proyek tidak ditemukan",
+      });
+    }
+  } catch (error) {
+    console.error("Error updating project:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+//delete projek
+const deleteProject = async (req, res) => {
+  const project_id = req.params.id;
+  try {
+    await listProject.destroy({
+      where: { project_id: project_id },
+      include: [{ model: listContent, where: { project_id: project_id } }],
+    }),
+      res.status(200).json("Project di hapus");
+  } catch (error) {
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+//get all projek
+const getAllProject = async (req, res) => {
+  const Project = await listProject.findAll({
+    include: [{ model: listContent }],
+  });
+  res.status(200).json(Project);
+};
+
+//get one projek
+const getOneProject = async (req, res) => {
+  const { project_id } = req.params.id;
+  try {
+    const project = await listProject.findByPk(project_id, {
+      // where: { project_id: project_id },
+      include: [{ model: listContent, where: { project_id: project_id } }],
+    });
+
+    if (project) {
+      res.status(200).json(project);
+    } else {
+      res.status(404).json({ error: "Proyek tidak ditemukan" });
+    }
+  } catch (error) {
+    console.error("Error retrieving project:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+module.exports = {
+  addProject,
+  updateProject,
+  deleteProject,
+  getAllProject,
+  getOneProject,
+  addContent,
+  register,
+  login,
+  logOut,
+};
