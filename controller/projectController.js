@@ -1,33 +1,28 @@
 const db = require("../config/config");
 const listProject = db.listProject;
 const listContent = db.listContent;
-// const firebase = require("../config/config.firebase");
-// const { getStorage, ref } = require("firebase/storage");
+const admin = require("firebase-admin");
+const serviceAccount = require("../serviceAccountKey.json");
 
-// const storage = firebase.storage().ref();
-// global.XMLHttpRequest = require("xhr2");
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+  storageBucket: "gs://scuede.appspot.com",
+});
 
-// const addImage = async (req, res) => {
-//   try {
-//     const file = req.file;
-
-//     const timestamp = Date.now();
-//     const name = file.originalname.split(".")[0];
-//     const type = file.originalname.split(".")[1];
-//     const fileName = `${name}_${timestamp}.${type}`;
-
-//     const imageRef = storage.child(fileName);
-
-//     const snapshot = await imageRef.put(file.buffer);
-
-//     const downloadURL = await snapshot.ref.getDownloadURL();
-
-//     res.send(downloadURL);
-//   } catch (error) {
-//     console.log(error);
-//     res.status(400).send(error.message);
-//   }
-// };
+const addImage = async (req, res) => {
+  try {
+    const bucket = admin.storage().bucket();
+    const imageBuffer = req.file.buffer;
+    const imageName = req.file.originalname;
+    const file = bucket.file(imageName);
+    const result = await file.save(imageBuffer, {
+      contentType: "image/jpeg/mp4",
+    });
+    return res.status(200).json({ message: "upload berhasil" });
+  } catch (error) {
+    res.status(500).send(`Error uploading image ${error} `);
+  }
+};
 //tambah projek
 const addProject = async (req, res) => {
   try {
@@ -98,4 +93,5 @@ module.exports = {
   deleteProject,
   getAllProject,
   getOneProject,
+  addImage,
 };
