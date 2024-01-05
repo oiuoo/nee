@@ -1,6 +1,6 @@
 require("dotenv").config();
 const router = require("./routes/router");
-
+const cookieParser = require('cookie-parser')
 const express = require("express");
 var cors = require("cors");
 const app = express();
@@ -8,6 +8,7 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors({ origin: true }));
+app.use(cookieParser())
 
 app.get("/", (req, res) => {
   res.send("Hello World!");

@@ -1,6 +1,7 @@
 const db = require("../config/config.js");
 const Admin = db.admin;
 const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
 
 const register = async (req, res) => {
   try {
@@ -57,15 +58,15 @@ const login = async (req, res) => {
         data: null,
       });
     }
-    const admin = await Admin.findOne({ where: { username: username } });
+    const admin = await Admin.findOne({ where: { username } });
     if (!admin) {
       return res.status(404).json({
         message: "username/password salah 1",
       });
     }
-    //check password
+    // check password
     const isValid = await bcrypt.compare(password, admin.password);
-    if (isValid != true) {
+    if (!isValid) {
       return res.status(401).json({
         message: "username/password salah 2",
       });
@@ -73,20 +74,19 @@ const login = async (req, res) => {
 
     //jwt
     const userToken = {
-      id: admin.id,
+      user_id: admin.user_id,
       username: admin.username,
     };
 
-    jwt.sign(
-      { userToken },
-      process.env.JWT_KEY,
-      {
-        expiresIn: "1d",
-      },
-      (err, token) => {
-        res.json({ token: token }).status(200);
-      }
-    );
+    const token = jwt.sign({ userToken }, process.env.JWT_KEY, {
+      expiresIn: "1d",
+    });
+    res.cookie("access_token", token, {
+      httpOnly: true,
+      sameSite: "strict",
+      maxAge: 60 * 60 * 24 * 30,
+    });
+    return res.json({ token: token }).status(200);
   } catch (error) {
     return res.status(500).json({
       message: `Terjadi kesalahan saat login ${error}`,
@@ -95,16 +95,40 @@ const login = async (req, res) => {
   }
 };
 const logOut = async (req, res) => {
-  try {
-    if (req.headers.authorization) {
-      const token = req.headers.authorization.split(" ")[1];
-      res.json({ msg: "Logout sucessfully" }).status(200);
-    } else {
-      res.json({ msg: "Token required" }).status(422);
-    }
-  } catch (error) {
-    console.log(error);
-    res.json({ msg: error }).status(422);
-  }
+  // try {
+  //   if (req.headers.authorization) {
+  //     // const token = req.headers.authorization.split(" ")[1];
+  //     // token = null;
+  //     req.headers.authorization = null;
+  //     res.json({ msg: "Logout sucessfully" }).status(200);
+  //   } else {
+  //     res.json({ msg: "Token required" }).status(422);
+  //   }
+  // } catch (error) {
+  //   console.log(error);
+  //   res.json({ msg: error }).status(422);
+  // }
+  // const  auth  = req.cookies.token;
+  // // const auth = req.headers.authorization
+
+  // if (!auth) {
+  //   return res.status(401).json({
+  //     status: "error",
+  //     error: "Unauthorized",
+  //   });
+  // }
+
+  // res.clearCookie("token", null, {
+  //   httpOnly: true,
+  //   sameSite: "strict",
+  //   maxAge: -1,
+  // });
+  // return res.status(200).json({
+  //   message: "Logout successfully",
+  // });
+  res.clearCookie("access_token");
+  res.status(200).json({
+    message: "Logout successfully",
+  });
 };
 module.exports = { register, login, logOut };

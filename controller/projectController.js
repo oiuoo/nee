@@ -1,7 +1,33 @@
-const db = require("../config/config.js");
+const db = require("../config/config");
 const listProject = db.listProject;
 const listContent = db.listContent;
+// const firebase = require("../config/config.firebase");
+// const { getStorage, ref } = require("firebase/storage");
 
+// const storage = firebase.storage().ref();
+// global.XMLHttpRequest = require("xhr2");
+
+// const addImage = async (req, res) => {
+//   try {
+//     const file = req.file;
+
+//     const timestamp = Date.now();
+//     const name = file.originalname.split(".")[0];
+//     const type = file.originalname.split(".")[1];
+//     const fileName = `${name}_${timestamp}.${type}`;
+
+//     const imageRef = storage.child(fileName);
+
+//     const snapshot = await imageRef.put(file.buffer);
+
+//     const downloadURL = await snapshot.ref.getDownloadURL();
+
+//     res.send(downloadURL);
+//   } catch (error) {
+//     console.log(error);
+//     res.status(400).send(error.message);
+//   }
+// };
 //tambah projek
 const addProject = async (req, res) => {
   try {
@@ -32,7 +58,9 @@ const addProject = async (req, res) => {
 const updateProject = async (req, res) => {
   const id = req.params.id;
 
-  const product = await listProject.update(req.body, { where: { id: id } });
+  const product = await listProject.update(req.body, {
+    where: { project_id: id },
+  });
 
   res.status(200).send(product);
 };
@@ -41,7 +69,7 @@ const updateProject = async (req, res) => {
 const deleteProject = async (req, res) => {
   const id = req.params.id;
 
-  await Product.destroy({ where: { id: id } });
+  await listProject.destroy({ where: { project_id: id } });
 
   res.status(200).send("Project di hapus");
 };
@@ -64,7 +92,6 @@ const getOneProject = async (req, res) => {
   res.status(200).send(project);
 };
 
-const upload = async (req, res) => {};
 module.exports = {
   addProject,
   updateProject,
