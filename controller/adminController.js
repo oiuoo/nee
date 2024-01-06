@@ -15,7 +15,8 @@ const register = async (req, res) => {
   const { username, password, userFullName, userIMG } = req.body;
   try {
     const bucket = admin.storage().bucket();
-    const avatarFileName = `${userIMG}`;
+    const folderNamae = "admin";
+    const avatarFileName = `${folderNamae}/${userIMG}`;
     const file = bucket.file(avatarFileName);
     const stream = file.createWriteStream({
       metadata: {
@@ -150,10 +151,18 @@ const addProject = async (req, res) => {
   }
 };
 const addContent = async (req, res) => {
+  const allowedContentTypes = ["image/jpeg", "image/png", "video/mp4"];
   const { filename, project_id } = req.body;
   try {
+    if (!allowedContentTypes.includes(req.file.mimetype)) {
+      return res.status(400).json({
+        error: "Tipe file tidak valid.",
+      });
+    }
+
     const bucket = admin.storage().bucket();
-    const avatarFileName = `${filename}`;
+    const folderName = "content";
+    const avatarFileName = `${folderName}/${filename}`;
     const file = bucket.file(avatarFileName);
     const stream = file.createWriteStream({
       metadata: {
@@ -189,18 +198,21 @@ const addContent = async (req, res) => {
 };
 //update projek
 const updateProject = async (req, res) => {
-  const project_id = req.params.id;
   try {
-    const updatedProject = await listProject.findByPk(project_id);
-    const updatedRows = await listProject.update(req.body, {
-      where: { project_id: project_id },
-    });
+    // const updatedProject = await listProject.findByPk(project_id);
+    const [updatedRows] = await listProject.update(
+      {
+        project_name: req.body.project_name,
+        description: req.body.description,
+        type_content: req.body.type_content,
+      },
+      { returning: true, where: { project_id: req.params.id } }
+    );
 
-    if (updatedRows > 0) {
-
+    if (updatedRows) {
       res.status(200).json({
         message: "Proyek berhasil diupdate",
-        data: updatedProject,
+        data: updatedRows,
       });
     } else {
       res.status(404).json({
@@ -236,11 +248,11 @@ const getAllProject = async (req, res) => {
 
 //get one projek
 const getOneProject = async (req, res) => {
-  const { project_id } = req.params.id;
+  const { id } = req.params;
   try {
-    const project = await listProject.findByPk(project_id, {
-      // where: { project_id: project_id },
-      include: [{ model: listContent, where: { project_id: project_id } }],
+    const project = await listProject.findByPk({
+      where: { project_id: id },
+      // include: [{ model: listContent, where: { project_id: project_id } }],
     });
 
     if (project) {
@@ -253,14 +265,50 @@ const getOneProject = async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 };
+const getContent = async (req, res) => {
+  const filename = req.body;
+  try {
+    const folderName = "content";
+    const file = admin.storage().bucket().file(`${folderName}/${filename}`);
+    const url = await file.getSignedUrl({
+      action: "read",
+      expires: "01-01-2100",
+    });
+    res.status(201).json({
+      message: "content berhasil didapatkan",
+      data: url[0],
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
 
+const stream = async (req, res) => {
+  const filename = req.body;
+  try {
+    const folderName = "content";
+    const file = admin.storage().bucket().file(`${folderName}/${filename}`);
+    const url = await file.getSignedUrl({
+      action: "read",
+      expires: "01-01-2100",
+    });
+
+    // Gunakan modul 'request' untuk melakukan streaming file dari URL Firebase Storage ke klien
+    const request = require("request");
+    request(url[0]).pipe(res);
+  } catch (error) {
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
 module.exports = {
   addProject,
   updateProject,
   deleteProject,
   getAllProject,
   getOneProject,
+  getContent,
   addContent,
+  stream,
   register,
   login,
   logOut,
