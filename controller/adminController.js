@@ -198,31 +198,62 @@ const addContent = async (req, res) => {
 };
 //update projek
 const updateProject = async (req, res) => {
+  const { id } = req.params;
   try {
-    // const updatedProject = await listProject.findByPk(project_id);
-    const [updatedRows] = await listProject.update(
-      {
-        project_name: req.body.project_name,
-        description: req.body.description,
-        type_content: req.body.type_content,
+    const currentProj = await listProject.findOne({
+      where: {
+        project_id: id,
       },
-      { returning: true, where: { project_id: req.params.id } }
-    );
+    });
+    if (!currentProj)
+      return res.status(400).json({
+        message: "Proyek tidak ditemukan",
+        data: currentProj,
+      });
 
-    if (updatedRows) {
-      res.status(200).json({
-        message: "Proyek berhasil diupdate",
-        data: updatedRows,
-      });
-    } else {
-      res.status(404).json({
-        error: "Proyek tidak ditemukan",
-      });
-    }
+    //ini harus update semua
+    currentProj.project_name = req.body.project_name;
+    currentProj.description = req.body.description;
+    currentProj.type_content = req.body.type_content;
+    await currentProj.save();
+    // else {
+    //   res.status(404).json({
+    //     error: "Proyek tidak ditemukan",
+    //   });
+    // }
+    res.status(200).json({
+      message: "Proyek berhasil diupdate",
+      data: currentProj,
+    });
   } catch (error) {
     console.error("Error updating project:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
+  // try {
+  //   const [updatedRows] = await listProject.update(
+  //     {
+  //       project_name: req.body.project_name,
+  //       description: req.body.description,
+  //       type_content: req.body.type_content,
+  //     },
+  //     { returning: true, where: { project_id: id } }
+  //   );
+
+  //   if (updatedRows[0] === 1) {
+  //     const updatedProject = await listProject.findByPk(id);
+  //     res.status(200).json({
+  //       message: "Proyek berhasil diupdate",
+  //       data: updatedProject,
+  //     });
+  //   } else {
+  //     res.status(404).json({
+  //       error: "Proyek tidak ditemukan",
+  //     });
+  //   }
+  // } catch (error) {
+  //   console.error("Error updating project:", error);
+  //   res.status(500).json({ error: "Internal Server Error" });
+  // }
 };
 //delete projek
 const deleteProject = async (req, res) => {
